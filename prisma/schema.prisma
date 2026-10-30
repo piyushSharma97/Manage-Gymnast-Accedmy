@@ -1,0 +1,1225 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "linux-musl"]
+}
+
+datasource db {
+  provider  = "mysql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// User Modoule
+enum UserStatus {
+  INACTIVE
+  ACTIVE
+  BLOCKED
+}
+
+enum Gender {
+  Male
+  Female
+  Mixed
+}
+
+enum SubscriptionStatus {
+  active
+  suspended
+  cancelled
+  trial
+}
+
+enum DocumentType {
+  birth_certificate
+  medical_form
+  photo_consent
+  waiver
+  insurance
+  id_proof
+  other
+}
+
+enum EnrollmentStatus {
+  PENDING
+  ENROLLED
+  SUSPENDED
+  COMPLETED
+  CANCELLED
+}
+
+
+enum InvoiceStatus {
+  Pending
+  Paid
+  Overdue
+  PartiallyPaid
+}
+
+model Apparatus {
+  id        Int      @id @default(autoincrement())
+  name      String      @db.VarChar(100)
+  pid       Int?     
+  gender    Gender
+  sequence  Int
+  isActive  Boolean     @default(true)
+  shortName String?     @db.VarChar(50)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  createdBy String?
+  updatedBy String?
+  @@map("apparatus")
+}
+
+model Attendance {
+  id         BigInt          @id @default(autoincrement())
+  studentId  BigInt
+  tenantId   Int
+  locationId Int
+  sessionDate DateTime
+  createdAt  DateTime        @default(now()) @db.Timestamp(6) 
+  createdBy  String?
+
+  // Relations
+  student  Student  @relation(fields: [studentId], references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@index([studentId])
+  @@index([tenantId])
+  @@index([locationId])
+  @@map("attendance")
+}
+
+model EmployeeAttendance {
+  id         BigInt          @id @default(autoincrement())
+  employeeId Int
+  tenantId   Int
+  locationId Int
+  checkInTime DateTime       @default(now())
+  checkOutTime DateTime?
+  qrCode     String?         @db.VarChar(255)
+  createdAt  DateTime        @default(now()) @db.Timestamp(6) 
+  createdBy  String?
+
+  // Relations
+  employee  Employee  @relation(fields: [employeeId], references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@index([employeeId])
+  @@index([tenantId])
+  @@index([locationId])
+  @@map("employeeattendance")
+}
+
+
+
+model AppConfig {
+  id          Int    @id @default(autoincrement())
+  configKey   String    @db.VarChar(100)
+  configValue String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  @@map("appconfig")
+}
+
+model Batch {
+  id         Int     @id @default(autoincrement())
+  tenantId   Int
+  programId  Int
+  courseId   Int
+  locationId Int
+  studentId  BigInt
+  paymentCycle     String?    @db.VarChar(25)
+  amount     Decimal?   @db.Decimal(9, 2) @default(0.00)
+  monday     String?    @db.VarChar(20)
+  tuesday    String?    @db.VarChar(20)
+  wednesday   String?    @db.VarChar(20)
+  thursday    String?    @db.VarChar(20)
+  friday    String?    @db.VarChar(20)
+  saturday    String?    @db.VarChar(20)
+  sunday    String?    @db.VarChar(20)
+  coachId    Int?
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  createdBy  String
+  updatedBy  String?
+  
+  // Relations
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  program Program  @relation(fields: [programId], references: [id])
+  course  Course   @relation(fields: [courseId], references: [id])
+  coach   Employee? @relation(fields: [coachId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+  invoices Invoice[]
+  enrollments Enrollment[]
+  @@index([tenantId])
+  @@index([programId])
+  @@index([courseId])
+  @@index([coachId])
+  @@index([locationId])
+  @@map("batch")
+}
+
+model Course {
+  id              Int    @id @default(autoincrement())
+  tenantId        Int
+  programId       Int
+  courseName      String    @db.VarChar(100)
+  courseCode      String?    @db.VarChar(20)
+  sportCategoryId Int
+  classFrequency  Int
+  perClass          Decimal?   @db.Decimal(9, 2) @default(0.00)
+  monthly          Decimal?   @db.Decimal(9, 2) @default(0.00)
+  quarterly          Decimal?   @db.Decimal(9, 2) @default(0.00)
+  halfYearly          Decimal?   @db.Decimal(9, 2) @default(0.00)
+  shortDescription String?  @db.Text
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?
+  updatedBy       String?
+
+  // Relations
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  program  Program  @relation(fields: [programId], references: [id])
+  batches  Batch[]
+  invoices Invoice[]
+  enrollments Enrollment[]
+
+  @@index([tenantId])
+  @@index([programId])
+  @@index([sportCategoryId])
+  @@map("course")
+}
+
+model User {
+  id              String      @id @default(uuid())  
+  tenantId        Int?
+  locationId      Int?
+  roleId          Int
+  name       String?     @db.VarChar(100)
+  lastName        String?     @db.VarChar(100)
+  email           String      @unique
+  password        String?
+  emailVerified   Int?
+  isSubscribed    Int?
+  lastSignInAt    DateTime?
+  emailVerifiedAt DateTime?
+  isTrashed       Boolean     @default(false)
+  avatar          String?
+  status          UserStatus
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  createdBy       String
+  updatedBy       String?
+
+  // Relations
+  role     UserRole  @relation(fields: [roleId], references: [id])
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  systemLog SystemLog[]
+  accounts  Account[]
+  sessions  Session[]
+  guardians Guardian[]
+
+  // Indexes
+  @@index([roleId])
+  @@index([status])
+  @@unique([tenantId, email])
+
+  @@map("user")
+}
+
+model UserRole {
+  id              Int               @id @default(autoincrement())
+  slug            String               @unique
+  name            String               @unique
+  description     String?
+  isActive       Boolean              @default(false)
+  users           User[]
+  permissions     UserRolePermission[]
+  createdAt       DateTime    @default(now())
+  createdBy       String?
+  @@map("userrole")
+}
+
+model UserPermission {
+  id              Int               @id @default(autoincrement())
+  slug            String               @unique
+  name            String
+  description     String?
+  createdBy       String?
+  createdAt       DateTime             @default(now())
+  roles           UserRolePermission[]
+  @@map("userpermission")
+}
+
+model UserRolePermission {
+  id           Int               @id @default(autoincrement())
+  roleId       Int
+  permissionId Int
+  assignedAt   DateTime @default(now())
+
+  role       UserRole       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission UserPermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("userrolepermission")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId], name: "provider_providerAccountId")
+  @@map("account")
+}
+
+model Enrollment {
+  id         BigInt        @id @default(autoincrement())
+  studentId  BigInt
+  tenantId   Int
+  locationId Int
+  programId  Int?
+  courseId   Int?
+  batchId    Int?
+  startDate  DateTime
+  endDate    DateTime?
+  remarks    String?       @db.Text
+  status     EnrollmentStatus @default(ENROLLED)
+  feePlan    Json?
+  active     Boolean       @default(true)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  createdBy  String?
+  updatedBy  String?
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id])
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+  program Program? @relation(fields: [programId], references: [id])
+  course  Course?  @relation(fields: [courseId], references: [id])
+  batch   Batch?   @relation(fields: [batchId], references: [id])
+
+  @@index([studentId])
+  @@index([tenantId])
+  @@index([locationId])
+  @@index([programId])
+  @@index([courseId])
+  @@index([batchId])
+  @@map("enrollment")
+}
+
+
+
+
+model Employee {
+  id         Int      @id @default(autoincrement())
+  tenantId   Int
+  locationId Int
+  userId    String?
+  firstName  String      @db.VarChar(100)
+  lastName   String?     @db.VarChar(100)
+  email      String?     @db.VarChar(150)
+  phone      String?     @db.VarChar(20)
+  role       EmployeeRole
+  hiredDate  DateTime?
+  isActive   Boolean     @default(true)
+  profilePhotoUrl String? @db.VarChar(500)
+  emergencyContactName String? @db.VarChar(50)
+  emergencyContactPhone String? @db.VarChar(20)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  createdBy  String
+  updatedBy  String?
+
+  // Relations
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+  batches Batch[]
+  employeedocuments EmployeeDocument[]
+  attendances EmployeeAttendance[]
+  employeeSkillLevels EmployeeSkillLevel[]
+  @@index([tenantId])
+  @@index([locationId])
+  @@map("employee")
+}
+
+model EmployeeSkillLevel {
+  id           Int    @id @default(autoincrement())
+  employeeId   Int
+  skillLevelId Int
+  createdAt    DateTime @default(now())
+  createdBy    String
+
+  // Relations
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  skillLevel SkillLevel @relation(fields: [skillLevelId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, skillLevelId])
+  @@index([employeeId])
+  @@index([skillLevelId])
+  @@map("employeeskilllevel")
+}
+
+enum EmployeeRole {
+  Coach
+  Admin
+  Manager
+  Staff
+}
+
+model EmployeeDocument {
+  id           BigInt            @id @default(autoincrement())
+  employeeId   Int
+  documentType DocumentType
+  documentName String            @db.VarChar(100)
+  fileUrl      String            @db.VarChar(500)
+  fileSize     Int?
+  fileType     String?           @db.VarChar(20)
+  uploadDate   DateTime?
+  expiryDate   DateTime?
+  uploadedBy   String?
+  isVerified   Boolean           @default(false)
+  verifiedBy   String?
+  verifiedAt   DateTime?
+  notes        String?           @db.Text
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  createdBy    String
+  updatedBy    String?
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([uploadedBy])
+  @@index([verifiedBy])
+  @@map("employeedocument")
+}
+
+model Location {
+  id             Int    @id @default(autoincrement())
+  tenantId       Int
+  centerName     String    @db.VarChar(100)
+  centerCode     String    @db.VarChar(20)
+  email          String?   @db.VarChar(100)
+  phone          String?   @db.VarChar(20)
+  addressLine1   String    @db.VarChar(255)
+  addressLine2   String?   @db.VarChar(255)
+  city           String    @db.VarChar(100)
+  state          String    @db.VarChar(100)
+  postalCode     String    @db.VarChar(20)
+  country        String    @db.VarChar(100)
+  managerName    String?   @db.VarChar(100)
+  managerPhone   String?   @db.VarChar(20)
+  managerEmail   String?   @db.VarChar(100)
+  operatingHours Json?     
+  facilities     Json?     
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String
+  updatedBy      String?
+  userId         String?
+  attendances Attendance[]
+  employeeAttendances EmployeeAttendance[]
+  employees Employee[]
+  makeupclass MakeupClass[]
+  payments Payment[]
+  invoices Invoice[]
+  students Student[]
+  users User[]
+  enrollments Enrollment[]
+  trials Trial[]
+  batches Batch[]
+  // Relation to Tenant
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("location")
+}
+model StudentEventFee {
+  id              Int       @id @default(autoincrement())
+  studentId       BigInt    // Changed from Int to BigInt to match Student.id
+  eventid         Int
+  Fees            Float?
+  EarlyBirdDisc   Float?
+  SiblingDisc     Float?
+  Total           Float     @default(0.00)
+  Additional      Float?
+  PaymentMode     String    @db.Text
+  Comments        String?   @db.Text
+  txnid           Int?
+  Status          Int       @default(0)
+  depositdate     DateTime  @db.Date
+  level           String?   @db.Text
+  eventtype       String?   @db.VarChar(50)
+  timing          String?   @db.VarChar(50)
+  height          Float?
+  weight          Float?
+  createdAt       DateTime? @db.DateTime
+  updatedAt       DateTime? @db.DateTime
+  createdBy       String?   @db.VarChar(190)
+  updatedBy       String?   @db.VarChar(190)
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id])
+  event   Event   @relation(fields: [eventid], references: [id])
+
+  @@index([studentId])
+  @@index([eventid])
+  @@map("student_event_fees")
+}
+model MakeupClass {
+  id             BigInt    @id @default(autoincrement())
+  studentId      BigInt
+  tenantId       Int
+  locationId     Int
+  participantName String   @db.VarChar(100)
+  makeupDate     DateTime
+  makeupTime     DateTime  @db.Time
+  createdAt      DateTime  @default(now())
+  createdBy      String?
+
+  // Relations
+  student  Student  @relation(fields: [studentId], references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@index([studentId])
+  @@index([tenantId])
+  @@index([locationId])
+  @@map("makeupclass")
+}
+
+model Payment {
+  id         BigInt     @id @default(autoincrement())
+  studentId  BigInt
+  tenantId   Int
+  locationId Int
+  invoiceId  BigInt?
+  courseId   Int
+  paymentMode String?    @db.VarChar(20)
+  orderid    String?    @db.VarChar(20)
+  txnid      String?    @db.VarChar(20)
+  siblingDiscount Decimal    @db.Decimal(5,2)
+  registration Decimal    @db.Decimal(12,2) @default(0.00)
+  amountPaid Decimal    @db.Decimal(10,2)
+  remarks    String?    @db.VarChar(100)
+  amount     Decimal    @db.Decimal(12,2)
+  discount   Decimal    @db.Decimal(12,2) @default(0.00)
+  reference  String?    @db.VarChar(255)
+  receivedAt DateTime   @default(now())
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  createdBy  String
+  updatedBy  String?
+
+  // Relations
+  student  Student  @relation(fields: [studentId], references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@index([studentId])
+  @@index([tenantId])
+  @@index([locationId])
+  @@index([invoiceId])
+  @@map("payment")
+}
+
+model Invoice {
+  id         BigInt       @id @default(autoincrement())
+  invoiceno  String
+  tenant_autoinc Int
+  studentId  BigInt
+  tenantId   Int
+  locationId Int
+  courseId   Int?
+  batchId    Int?
+  amount     Decimal?     @db.Decimal(12,2)
+  siblingDiscount Decimal    @db.Decimal(5,2)
+  discount   Decimal    @db.Decimal(12,2) @default(0.00)
+  registration Decimal    @db.Decimal(12,2) @default(0.00)
+  billingMonth DateTime
+  dueDate    DateTime?
+  status     InvoiceStatus @default(Pending)
+  issuedAt   DateTime     @default(now())
+  paidAt     DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  createdBy  String
+  updatedBy  String?
+
+  // Relations
+  student  Student  @relation(fields: [studentId], references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+  course  Course?   @relation(fields: [courseId], references: [id])
+  batch   Batch?    @relation(fields: [batchId], references: [id])
+
+  @@index([studentId])
+  @@index([tenantId])
+  @@index([locationId])
+  @@index([courseId])
+  @@index([batchId])
+  @@map("invoice")
+}
+
+
+model Guardian {
+  id        BigInt    @id @default(autoincrement())
+  tenantId  Int
+  userId    String?
+  firstName String    @db.VarChar(100)
+  lastName  String?   @db.VarChar(100)
+  email     String?   @db.VarChar(255)
+  phone     String?   @db.VarChar(50)
+  address   Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String
+  updatedBy String?
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+  studentguardians StudentGuardian[]
+  feedbackMessages FeedbackMessage[]
+  @@index([tenantId])
+  @@index([userId])
+  @@map("guardian")
+}
+
+model Program {
+  id            Int    @id @default(autoincrement())
+  tenantId      Int
+  name          String    @db.VarChar(255)
+  code          String?   @db.VarChar(100)
+  description   String?   @db.Text
+  ageMin        Int?
+  ageMax        Int?
+  durationWeeks Int?
+  sessionType   String?   @db.VarChar(100)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdBy     String
+  updatedBy     String?
+
+  // Relation to Tenant
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  batches  Batch[]
+  courses Course[]
+  enrollments Enrollment[]
+  @@index([tenantId])
+  @@map("program")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("session")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationtoken")
+}
+
+model Student {
+  id                          BigInt      @id @default(autoincrement())
+  tenantId                    Int
+  locationId                  Int
+  userId    String?
+  registrationNo              String      @db.VarChar(100)
+  firstName                   String      @db.VarChar(100)
+  middleName                  String?     @db.VarChar(100)
+  lastName                    String?     @db.VarChar(100)
+  dob                         DateTime?
+  gender                      Gender
+  email                       String?     @db.VarChar(100)
+  phone                       String?     @db.VarChar(20)
+  bloodGroup                  String?     @db.VarChar(5)
+  profilePhotoUrl             String?     @db.VarChar(500)
+  addressLine1                String?     @db.VarChar(255)
+  addressLine2                String?     @db.VarChar(255)
+  city                        String?     @db.VarChar(100)
+  state                       String?     @db.VarChar(100)
+  postalCode                  String?     @db.VarChar(20)
+  country                     String?     @db.VarChar(100)
+  schoolName                  String?     @db.VarChar(100)
+  Board                  String?     @db.VarChar(100)
+  gradeClass                  String?     @db.VarChar(20)
+  sportCategoryName           String?   @db.VarChar(100)
+  skilllevelName              String?   @db.VarChar(20)
+  team                         String?
+  courseId                  Int?
+  siblingDiscount           Int?
+  lastfeesamt               Decimal?
+  lastfeesdate              DateTime?
+  nextduedate               DateTime?
+  joinDate                     DateTime?
+  emergencyContactName        String?     @db.VarChar(100)
+  emergencyContactRelationship String?    @db.VarChar(50)
+  emergencyContactPhone       String?     @db.VarChar(20)
+  emergencyContactEmail       String?     @db.VarChar(100)
+  status                     UserStatus @default(ACTIVE)
+  notes                        String?    @db.Text  
+  deactivateDate                DateTime?
+  deletedAt                    DateTime?
+  createdAt                    DateTime   @default(now())
+  updatedAt                    DateTime   @updatedAt
+  createdBy                    String
+  updatedBy                    String?
+
+  // Relations
+  tenant            Tenant         @relation(fields: [tenantId], references: [id])
+  location          Location       @relation(fields: [locationId], references: [id])
+  
+  enrollments Enrollment[]
+  studentguardians StudentGuardian[]
+  studentdocuments StudentDocument[]
+  attendances Attendance[]
+  invoices Invoice[] 
+  makeupclass MakeupClass[]
+  payments Payment[]
+  studentEventFees StudentEventFee[]
+  fitnessResults FitnessResult[]
+  @@index([tenantId])
+  @@index([locationId])
+  @@map("student")
+}
+
+model StudentDocument {
+  id           BigInt            @id @default(autoincrement())
+  studentId    BigInt
+  documentType DocumentType
+  documentName String            @db.VarChar(100)
+  fileUrl      String            @db.VarChar(500)
+  fileSize     Int?
+  fileType     String?           @db.VarChar(20)
+  uploadDate   DateTime?
+  expiryDate   DateTime?
+  uploadedBy   String?
+  isVerified   Boolean           @default(false)
+  verifiedBy   String?
+  verifiedAt   DateTime?
+  notes        String?           @db.Text
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  createdBy    String
+  updatedBy    String?
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@index([studentId])
+  @@index([uploadedBy])
+  @@index([verifiedBy])
+  @@map("studentdocument")
+}
+
+model StudentGuardian {
+  id         BigInt   @id @default(autoincrement())
+  studentId  BigInt
+  guardianId BigInt
+  relation   String?  @db.VarChar(100)
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdBy  String
+  updatedBy  String?
+
+  // Relations
+  student  Student  @relation(fields: [studentId], references: [id])
+  guardian Guardian @relation(fields: [guardianId], references: [id])
+
+  @@index([studentId])
+  @@index([guardianId])
+  @@map("studentguardian")
+}
+
+model SystemLog {
+  id          String   @id @default(uuid())
+  userId      String
+  createdAt   DateTime @default(now())
+  entityId    Int
+  entityType  String
+  event       String
+  description String
+  ipAddress   String
+  meta        String
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("systemlog")
+}
+
+model SystemSetting {
+  id             String  @id @default(uuid())
+  name           String  @default("My Company")
+  logo           String?
+  active         Boolean @default(true)
+  address        String?
+  websiteURL     String?
+  supportEmail   String?
+  supportPhone   String?
+  language       String  @default("en")
+  timezone       String  @default("UTC")
+  currency       String  @default("USD")
+  currencyFormat String  @default("$ {value}")
+
+  socialFacebook  String?
+  socialTwitter   String?
+  socialInstagram String?
+  socialLinkedIn  String?
+  socialPinterest String?
+  socialYoutube   String?
+
+  notifyStockEmail               Boolean  @default(true)
+  notifyStockWeb                 Boolean  @default(true)
+  notifyStockThreshold           Int      @default(10)
+  
+  notifyNewOrderEmail            Boolean  @default(true)
+  notifyNewOrderWeb              Boolean  @default(true)
+  notifyOrderStatusUpdateEmail   Boolean  @default(true)
+  notifyOrderStatusUpdateWeb     Boolean  @default(true)
+  notifyPaymentFailureEmail      Boolean  @default(true)
+  notifyPaymentFailureWeb        Boolean  @default(true)
+  notifySystemErrorFailureEmail  Boolean  @default(true)
+  notifySystemErrorWeb           Boolean  @default(true)
+  
+  @@map("systemsetting")
+}
+
+model SubscriptionPlan {
+  id                     Int    @id @default(autoincrement())
+  planName               String    @db.VarChar(50)
+  planCode               String    @db.VarChar(20)
+  description            String?   @db.Text
+  maxCenters             Int
+  maxStudentsPerCenter   Int
+  maxStaffPerCenter      Int
+  monthlyPrice           Decimal   @db.Decimal(10, 2)
+  yearlyPrice            Decimal   @db.Decimal(10, 2)
+  isActive               Boolean   @default(true)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  createdBy              String
+  updatedBy              String?
+  tenants Tenant[]
+  @@map("subscriptionplan")
+}
+
+model SportsCategory {
+  id         Int    @id @default(autoincrement())
+  categoryName String  @db.VarChar(50)
+  description String?  @db.Text
+  isActive   Boolean   @default(true)
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  createdBy  String
+  updatedBy  String?
+  skillLevels SkillLevel[]
+  @@map("sportscategory")
+}
+
+model SkillLevel {
+  id            Int       @id @default(autoincrement())
+  sportsId      Int 
+  tenantId      Int
+  levelName     String    @db.VarChar(50)
+  levelCode     String    @db.VarChar(50)
+  description   String?   @db.Text
+  orderSequence Int       @default(1)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdBy     String
+  updatedBy     String?
+  
+  // Relations
+  sportsCategory SportsCategory @relation(fields: [sportsId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  employeeSkillLevels EmployeeSkillLevel[]
+
+  @@index([sportsId])
+  @@index([tenantId])
+  @@map("skilllevel")
+}
+
+model Tenant {
+  id                         Int   @id @default(autoincrement())
+  academyName                String   @db.VarChar(100)
+  academyCode                String   @unique @db.VarChar(20)
+  businessRegistrationNumber String?  @db.VarChar(50)
+  taxId                      String?  @db.VarChar(50)
+  website                    String?  @db.VarChar(255)
+  logoUrl                    String?  @db.VarChar(500)
+  primaryEmail               String   @db.VarChar(100)
+  primaryPhone               String   @db.VarChar(20)
+  addressLine1               String   @db.VarChar(255)
+  addressLine2               String?  @db.VarChar(255)
+  city                       String   @db.VarChar(100)
+  state                      String   @db.VarChar(100)
+  postalCode                 String   @db.VarChar(20)
+  country                    String   @db.VarChar(100)
+  timeZone                   String   @default("UTC") @db.VarChar(50)
+  subscriptionPlanId         Int
+  subscriptionStatus         SubscriptionStatus @default(trial)
+  subscriptionStartDate      DateTime
+  subscriptionEndDate        DateTime
+  isActive                   Boolean  @default(true)
+  awsSMTPSecure              String?
+  awsHost                    String?  @db.VarChar(255)
+  awsPort                    Int?
+  awsUsername                String?  @db.VarChar(255)
+  awsPassword                String?  @db.VarChar(255)
+  payuMerchantKey            String?  @db.VarChar(255)
+  payuMerchantSalt           String?  @db.VarChar(255)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  // Link to the user who created/owns this tenant
+  userId  String?
+  users  User[]
+
+  // Relation to subscription plan
+  subscriptionPlan SubscriptionPlan @relation(fields: [subscriptionPlanId], references: [id])
+  attendances Attendance[]
+  employeeAttendances EmployeeAttendance[]
+  batches Batch[]
+  programs Program[]
+  courses  Course[]
+  
+  enrollments Enrollment[]
+  employees Employee[]
+  locations Location[]
+  makeupclass MakeupClass[]
+  payments Payment[]
+  invoices Invoice[]
+  guardians Guardian[]
+  students Student[]
+  trials Trial[]
+  tenantcounters TenantCounter[]
+  teams team[]
+  skillLevels SkillLevel[]
+  skills Skill[]
+  parentYoutubeLinks ParentYoutubeLink[]
+  feedbackMessages  FeedbackMessage[]
+  @@index([subscriptionPlanId])
+  @@index([userId])
+  @@map("tenant")
+}
+
+model TenantCounter {
+  tenantId        Int   @id
+  lastStudentSeq  BigInt   @default(0)
+  updatedAt       DateTime @updatedAt
+  createdBy       String
+  updatedBy       String?
+
+  // Relation
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  @@map("tenantcounter")
+}
+
+model Trial {
+  id             BigInt     @id @default(autoincrement())
+  tenantId       Int
+  locationId     Int?
+  participantName String    @db.VarChar(100)
+  parentName     String?    @db.VarChar(100)
+  phone          String?    @db.VarChar(20)
+  trialDate      DateTime
+  trialTime      String   @db.VarChar(20)
+  gender         Gender?
+  isRegistered   Boolean    @default(false)
+  email          String?    @db.VarChar(150)
+  type           String?    @db.VarChar(50)
+  age            Int?
+  instructor     String?    @db.VarChar(100)
+  other          String?    @db.Text
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  createdBy      String?
+  updatedBy      String?
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+
+  @@index([tenantId])
+  @@index([locationId])
+  @@map("trial")
+}
+
+model Event {
+  id            Int       @id @default(autoincrement())
+  name          String    @db.VarChar(250)
+  description   String    @db.Text
+  event_type    String?   @db.VarChar(100)
+  startdate     DateTime  @db.Date
+  enddate       DateTime  @db.Date
+  fees          Float     @default(0.00) @db.Float
+  earlybird     Float?    @db.Float
+  early_date    DateTime? @db.Date
+  regstart_date DateTime? @db.Date
+  time          String?   @db.VarChar(50)
+  regend        DateTime? @db.Date
+  locationId   Int
+  tenantId     Int
+  createdBy    String?   @db.VarChar(50)
+  createdAt    DateTime  @default(now()) @db.Timestamp(6)
+  updatedBy    String    @db.VarChar(50)
+  updatedAt    DateTime  @updatedAt @db.Timestamp(6)
+
+  // Relations
+  studentEventFees StudentEventFee[]
+
+  @@map("events")
+}
+model team {
+  id         Int       @id @default(autoincrement())
+  name       String    @db.VarChar(50)
+  tenantId   Int
+  status     String    @db.VarChar(20)
+  createdAt  DateTime  @default(now()) @db.Timestamp(6)
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("team")
+}
+
+// Fitness: categories → skills → grading criteria; results per student
+model FitnessCategory {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(500)
+  createdAt DateTime? @db.DateTime
+  updatedAt DateTime? @db.DateTime
+  createdBy String?   @db.VarChar(151)
+  updatedBy String?   @db.VarChar(151)
+
+  fitnessSkills   FitnessSkill[]
+  fitnessResults  FitnessResult[]
+
+  @@map("fitness_categories")
+}
+
+model FitnessSkill {
+  id                Int       @id @default(autoincrement())
+  name              String    @db.VarChar(200)
+  createdAt         DateTime? @db.DateTime
+  updatedAt         DateTime? @db.DateTime
+  createdBy         String?   @db.VarChar(151)
+  updatedBy         String?   @db.VarChar(151)
+  fitnessCategoryId Int       @map("fitness_categoryid")
+  unitOfMeasurement String    @db.VarChar(190) @map("unit_of_measurement")
+
+  // Relations
+  fitnessCategory     FitnessCategory          @relation(fields: [fitnessCategoryId], references: [id])
+  gradingCriteria     FitnessGradingCriteria[]
+  fitnessResults      FitnessResult[]
+
+  @@index([fitnessCategoryId])
+  @@map("fitness_skill")
+}
+
+model FitnessGradingCriteria {
+  id             Int       @id @default(autoincrement())
+  fitnessSkillId Int       @map("fitness_skill_id")
+  level          String    @db.VarChar(200)
+  description    String?   @db.VarChar(300)
+  targetValue    String?   @db.VarChar(200) @map("targetvalue")
+  createdAt      DateTime? @db.DateTime
+  updatedAt      DateTime? @db.DateTime
+  createdBy      String?   @db.VarChar(200)
+  updatedBy      String?   @db.VarChar(200)
+
+  fitnessSkill FitnessSkill @relation(fields: [fitnessSkillId], references: [id])
+
+  @@index([fitnessSkillId])
+  @@map("fitness_grading_criteria")
+}
+
+model FitnessResult {
+  id                Int       @id @default(autoincrement())
+  studentId         BigInt    @map("gymnast_id")
+  level             String    @db.VarChar(200)
+  fitnessSkillId    Int       @map("fitness_skill_id")
+  fitnessCategoryId Int       @map("fitness_categoryid")
+  achievedValue     String    @db.VarChar(200) @map("achieved_value")
+  remarks           String?   @db.VarChar(200)
+  date              DateTime  @db.DateTime
+  /// When set, ties this row to a fitness-assessment event (required for admin assessment flows).
+  eventId           Int?      @map("event_id")
+  tenantId          Int?      @map("tenant_id")
+  createdAt         DateTime? @db.DateTime
+  updatedAt         DateTime? @db.DateTime
+  createdBy         String?   @db.VarChar(200)
+  updatedBy         String?   @db.VarChar(200)
+
+  student        Student         @relation(fields: [studentId], references: [id])
+  fitnessSkill   FitnessSkill    @relation(fields: [fitnessSkillId], references: [id])
+  fitnessCategory FitnessCategory @relation(fields: [fitnessCategoryId], references: [id])
+
+  @@index([studentId])
+  @@index([fitnessSkillId])
+  @@index([fitnessCategoryId])
+  @@index([date])
+  @@index([eventId])
+  @@index([tenantId])
+  @@map("fitness_result")
+}
+
+model ParentYoutubeLink {
+  id           Int       @id @default(autoincrement())
+  tenantId     Int
+  link         String    @db.VarChar(500)
+  title        String?   @db.VarChar(500)
+  thumbnailUrl String?   @db.VarChar(500)
+  description  String?   @db.VarChar(500)
+  createdAt    DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?   @db.VarChar(151)
+  updatedBy   String?   @db.VarChar(151)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("parent_youtube_link")
+}
+
+// Parent feedback/messages to admin/manager/coach with reply thread
+model FeedbackMessage {
+  id              BigInt    @id @default(autoincrement())
+  tenantId        Int
+  guardianId      BigInt
+  senderUserId    String    @db.VarChar(36)
+  senderRole      String    @db.VarChar(20) // parent, admin, manager, coach
+  parentMessageId BigInt?   // null = thread root, set = reply
+  subject         String?   @db.VarChar(500) // only on root
+  body            String    @db.Text
+  createdAt       DateTime  @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  guardian Guardian @relation(fields: [guardianId], references: [id])
+
+  replies       FeedbackMessage[]  @relation("FeedbackReplies")
+  parentMessage FeedbackMessage?   @relation("FeedbackReplies", fields: [parentMessageId], references: [id])
+  notifications FeedbackNotification[]
+
+  @@index([tenantId])
+  @@index([guardianId])
+  @@index([parentMessageId])
+  @@index([createdAt])
+  @@map("feedback_message")
+}
+
+model FeedbackNotification {
+  id                BigInt    @id @default(autoincrement())
+  feedbackMessageId BigInt
+  userId            String    @db.VarChar(36)
+  readAt            DateTime? @db.Timestamp(6)
+  createdAt         DateTime  @default(now())
+
+  feedbackMessage FeedbackMessage @relation(fields: [feedbackMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([feedbackMessageId, userId])
+  @@index([userId])
+  @@index([feedbackMessageId])
+  @@index([readAt])
+  @@map("feedback_notification")
+}
+
+model Skill {
+  id            Int      @id @default(autoincrement())
+  apparatus_id  Int
+  apparatus_name String   @db.VarChar(20)
+  name          String   @db.VarChar(200)
+  gender        String   @db.VarChar(10)
+  color         String?  @db.VarChar(10)
+  level         String?  @db.VarChar(10)
+  status        String   @db.VarChar(10)
+  tenant_id     Int?
+  deletedAt     DateTime?
+  createdby     String   @db.VarChar(151)
+  createdat     DateTime @default(now())
+  updatedat     DateTime @updatedAt
+  
+  // Relations
+  tenant        Tenant?  @relation(fields: [tenant_id], references: [id])
+  assessmentScores AssessmentScore[]
+  
+  @@index([tenant_id])
+  @@map("skills")
+}
+
+model AssessmentComment {
+  id          Int       @id @default(autoincrement())
+  eventid     Int
+  tenantId    Int
+  studentId   Int
+  commentdate DateTime  @db.Date
+  comment     String?   @db.VarChar(500)
+  deletedAt   DateTime?
+
+  @@index([eventid])
+  @@index([tenantId])
+  @@index([studentId])
+  @@map("assessmentcomment")
+}
+
+model AssessmentScore {
+  id          Int       @id @default(autoincrement())
+  studentId   Int
+  apparatus_id Int
+  skillId     Int
+  level       String?   @db.VarChar(25)
+  score     Int
+  eventId   Int
+  tenantId Int
+  eventdate DateTime  @db.Date
+  remark    String?   @db.VarChar(200)
+
+  // Relations
+  skill     Skill     @relation(fields: [skillId], references: [id])
+
+  @@index([studentId])
+  @@index([apparatus_id])
+  @@index([skillId])
+  @@index([eventId])
+  @@index([tenantId])
+  @@map("assessmentscore")
+}
+
+ 

@@ -1,0 +1,11 @@
+import { z } from 'zod';
+
+export const TeamSchema = z.object({
+  name: z
+    .string()
+    .nonempty({ message: 'Team name is required.' })
+    .min(2, { message: 'Team name must be at least 2 characters long.' })
+    .max(50, { message: 'Team name must not exceed 50 characters.' }),
+});
+
+export type TeamSchemaType = z.infer<typeof TeamSchema>;
